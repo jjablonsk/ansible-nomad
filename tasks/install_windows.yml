@@ -1,0 +1,77 @@
+---
+# File: install_windows.yml - package installation tasks for Nomad 
+
+- name: See if Nomand service exists
+  ansible.windows.win_service_info:
+    name: Nomad
+  register: win_nomad_service
+  tags: installation
+
+- name: Stop Nomand service on Windows
+  ansible.windows.win_service:
+    name: Nomand
+    state: stopped
+  tags: installation
+  when:
+    - win_nomad_service.exists
+    - win_nomad_service.services[0].state == "started"
+
+- name: Create temporary directory to download Nomad
+  ansible.windows.win_tempfile:
+    state: directory
+    prefix: ansible-nomad.
+  register: nomad_temp_dir
+  tags: installation
+
+
+- name: Download and unarchive Nomad
+  block:
+    - name: Read Nomad package checksum file
+      ansible.windows.win_stat:
+        path: "{{ nomad_temp_dir.path }}\\nomad_{{ nomad_version }}_SHA256SUMS"
+      register: nomad_checksum
+      tags: installation
+
+    - name: Download Nomad package checksum file
+      ansible.windows.win_get_url:
+        url: "{{ nomad_checksum_file_url }}"
+        dest: "{{ nomad_temp_dir.path }}\\nomad_{{ nomad_version }}_SHA256SUMS"
+      tags: installation
+      when: not nomad_checksum.stat.exists | bool
+
+    - name: Read Nomad package checksum
+      ansible.windows.win_shell: findstr {{ nomad_pkg }} {{ nomad_temp_dir.path }}\nomad_{{ nomad_version }}_SHA256SUMS
+      args:
+        chdir: "{{ nomad_temp_dir.path }}"
+      register: nomad_pkg_checksum
+      tags: installation
+
+    - name: Download Nomad
+      ansible.windows.win_get_url:
+        url: "{{ nomad_zip_url }}"
+        dest: "{{ nomad_temp_dir.path }}\\{{ nomad_pkg }}"
+      tags: installation
+
+    - name: Calculate checksum
+      ansible.windows.win_stat:
+        path: "{{ nomad_temp_dir.path }}\\{{ nomad_pkg }}"
+        checksum_algorithm: sha256
+      register: nomad_pkg_hash
+      tags: installation
+
+    - name: Compare checksum to hashfile
+      ansible.builtin.fail:
+        msg: Checksum {{ nomad_pkg_checksum.stdout.split(' ') | first }} did not match calculated SHA256 {{ nomad_pkg_hash.stat.checksum }}!
+      when: nomad_pkg_hash.stat.checksum != (nomad_pkg_checksum.stdout.split(' ') | first)
+
+    - name: Unarchive Nomad and install binary
+      community.windows.win_unzip:
+        src: "{{ nomad_temp_dir.path }}\\{{ nomad_pkg }}"
+        dest: "{{ nomad_bin_dir }}"
+      tags: installation
+  always:
+    - name: Cleanup
+      ansible.windows.win_file:
+        path: "{{ nomad_temp_dir.path }}"
+        state: absent
+      tags: installation

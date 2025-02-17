@@ -1,0 +1,20 @@
+---
+# File: Windows.yml - Windows OS variables for Nomad
+
+# paths
+nomad_windows_path: /ProgramData/nomad
+nomad_bin_dir: "{{ nomad_windows_path }}/bin"
+nomad_config_dir: "{{ nomad_windows_path }}/config"
+nomad_data_dir: "{{ nomad_windows_path }}/data"
+nomad_plugin_dir: "{{ nomad_windows_path }}/plugins"
+nomad_run_dir: "{{ nomad_windows_path }}"
+nomad_binary: "{{ nomad_windows_path }}/bin/nomad.exe"
+
+nomad_bootstrap_state: "{{ nomad_windows_path }}/.nomad_bootstrapped"
+nomad_log_path: "{{ nomad_windows_path }}/log"
+
+nomad_syslog_enable: false
+nomad_tls_dir: "{{ nomad_windows_path }}/ssl"
+
+# users
+nomad_user: LocalSystem

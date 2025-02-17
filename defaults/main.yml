@@ -1,33 +1,6 @@
 ---
 # File: main.yml - Main default variables for nomad
 
-# assert supported os/versions
-os_supported_matrix:
-  AlmaLinux:
-    min_version: ""
-  Archlinux:
-    min_version: ""
-  Flatcar:
-    min_version: ""
-  # RHEL-based
-  RedHat:
-    min_version: "7"
-  CentOS:
-    min_version: "7"
-  Fedora:
-    min_version: ""
-  Amazon:
-    min_version: ""
-  # Debian based
-  OracleLinux:
-    min_version: "8"
-  Debian:
-    min_version: "10"
-  Ubuntu:
-    min_version: "20.04"
-  VMware Photon OS:
-    min_version: "4"
-
 ## Core
 nomad_debug: false
 
@@ -47,12 +20,18 @@ nomad_architecture_map:
   32-bit: "386"
   64-bit: amd64
 nomad_architecture: "{{ nomad_architecture_map[ansible_architecture] }}"
-nomad_pkg: nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip
-nomad_zip_url: https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_{{ nomad_architecture }}.zip
+nomad_os: "\
+  {% if ansible_os_family == 'Windows' %}\
+    {{ 'windows' }}\
+  {% else %}\
+    {{ ansible_system | lower }}\
+  {% endif %}"
+nomad_pkg: nomad_{{ nomad_version }}_{{ nomad_os }}_{{ nomad_architecture }}.zip
+nomad_zip_url: https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_{{ nomad_os }}_{{ nomad_architecture }}.zip
 nomad_checksum_file_url: https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_SHA256SUMS
 nomad_podman_enable: false
 nomad_podman_version: "{{ lookup('env', 'NOMAD_PODMAN_VERSION') | default('0.3.0', true) }}"
-nomad_podman_pkg: nomad-driver-podman_{{ nomad_podman_version }}_linux_{{ nomad_architecture }}.zip
+nomad_podman_pkg: nomad-driver-podman_{{ nomad_podman_version }}_{{ nomad_os }}_{{ nomad_architecture }}.zip
 nomad_podman_url: https://releases.hashicorp.com/nomad-driver-podman/{{ nomad_podman_version }}
 nomad_podman_zip_url: "{{ nomad_podman_url }}/{{ nomad_podman_pkg }}"
 nomad_podman_checksum_file_url: "{{ nomad_podman_url }}/nomad-driver-podman_{{ nomad_podman_version }}_SHA256SUMS"
@@ -64,6 +43,7 @@ nomad_data_dir: /var/nomad
 nomad_plugin_dir: "{{ nomad_data_dir }}/plugins"
 nomad_lockfile: /var/lock/subsys/nomad
 nomad_run_dir: /var/run/nomad
+nomad_binary: "{{ nomad_bin_dir }}/nomad"
 
 ### Initialization and startup script templates
 nomad_systemd_template: nomad_systemd.service.j2
@@ -80,7 +60,12 @@ nomad_datacenter: dc1
 nomad_region: global
 nomad_log_level: INFO
 nomad_syslog_enable: true
-nomad_iface: "{{ lookup('env', 'NOMAD_IFACE') | default(ansible_default_ipv4.interface, true) }}"
+nomad_iface: "\
+  {% if ansible_os_family == 'Windows' %}\
+    {{ lookup('env', 'NOMAD_IFACE') | default(ansible_interfaces[0].interface_name, true) }}\
+  {% else %}\
+    {{ lookup('env', 'NOMAD_IFACE') | default(ansible_default_ipv4.interface, true) }}\
+  {% endif %}"
 nomad_node_name: "{{ inventory_hostname_short }}"
 nomad_node_role: "{{ lookup('env', 'NOMAD_NODE_ROLE') | default('client', true) }}"
 nomad_leave_on_terminate: true
@@ -130,8 +115,20 @@ nomad_chroot_env: false
 nomad_plugins: {}
 nomad_template_config: {}
 ### Addresses
-nomad_bind_address: "{{ hostvars[inventory_hostname]['ansible_' + nomad_iface]['ipv4']['address'] }}"
-nomad_advertise_address: "{{ hostvars[inventory_hostname]['ansible_' + nomad_iface]['ipv4']['address'] }}"
+nomad_bind_address: "\
+  {% if ansible_os_family == 'Windows' %}\
+    {{ hostvars[inventory_hostname]['ansible_ip_addresses'][0] }}\
+  {% else %}\
+    {{ hostvars[inventory_hostname]['ansible_' + nomad_iface]['ipv4']['address'] }}\
+  {% endif %}"
+nomad_advertise_address: "\
+  {% if ansible_os_family == 'Windows' %}\
+    {{ hostvars[inventory_hostname]['ansible_ip_addresses'][0] }}\
+  {% else %}\
+    {{ hostvars[inventory_hostname]['ansible_' + nomad_iface]['ipv4']['address'] }}\
+  {% endif %}"
+
+
 
 ### Ports
 nomad_ports:
@@ -140,6 +137,7 @@ nomad_ports:
   serf: "{{ nomad_ports_serf | default('4648', true) }}"
 
 ### Servers
+nomad_join: []
 nomad_group_name: nomad_instances
 nomad_servers: "{% if nomad_use_consul == false %}{% set _nomad_servers = [] %}{% for host in groups[nomad_group_name] %}{% set _nomad_node_role = hostvars[host]['nomad_node_role']
   | default('client', true) %}{% if (_nomad_node_role == 'server' or _nomad_node_role == 'both') %}{% if _nomad_servers.append(host) %}{% endif %}{% endif %}{% endfor

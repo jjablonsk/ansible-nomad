@@ -8,7 +8,13 @@ client {
     node_pool = "{{ nomad_node_pool }}"
 {% endif %}
 
-{% if nomad_use_consul == False %}
+{% if nomad_join is defined and nomad_join|length > 0 %}
+    servers = [
+        {%- set comma = joiner(",") -%}
+        {%- for ip in nomad_join -%}
+            {{ comma() }}"{{ ip }}:{{ nomad_ports.rpc }}"
+        {%- endfor -%} ]
+{% elif nomad_use_consul == False %}
     servers = [
         {%- set comma = joiner(",") -%}
         {%- for server in nomad_servers -%}

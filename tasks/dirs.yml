@@ -1,0 +1,35 @@
+---
+# File: dirs.yml - Nomad directories
+- name: Create directories
+  ansible.builtin.file:
+    dest: "{{ item }}"
+    state: directory
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0755"
+  with_items:
+    - "{{ nomad_data_dir }}"
+    - "{{ nomad_plugin_dir }}"
+  when: ansible_os_family != 'Windows'
+
+- name: Create config directory
+  ansible.builtin.file:
+    dest: "{{ nomad_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ansible_os_family != 'Windows'
+
+
+- name: (Windows) Create directories
+  ansible.windows.win_file:
+    dest: "{{ dir_item }}"
+    state: directory
+  with_items:
+    - "{{ nomad_config_dir }}"
+    - "{{ nomad_data_dir }}"
+    - "{{ nomad_bin_dir }}"
+  loop_control:
+    loop_var: dir_item
+  when: ansible_os_family == 'Windows'

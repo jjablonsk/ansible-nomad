@@ -1,8 +1,21 @@
 ---
 # File: asserts.yml - Asserts for this playbook
 
-- name: Ping hosts
-  ansible.builtin.ping:
+- name: Define supported *nix distributions
+  ansible.builtin.set_fact:
+    _nomad_linux_distros:
+      - RedHat
+      - CentOS
+      - Fedora
+      - OracleLinux
+      - Debian
+      - Ubuntu
+      - VMware Photon OS
+      - Windows
+      - Archlinux
+      - AlmaLinux
+      - Amazon
+      - Flatcar
 
 - name: Ensure all hosts are reachable
   run_once: true
@@ -11,32 +24,61 @@
       - ansible_play_hosts == ansible_play_hosts_all
   when: not nomad_skip_ensure_all_hosts | bool
 
-- name: Os_supported_matrix | check distribution
-  ansible.builtin.assert:
-    quiet: true
-    fail_msg: "{{ ansible_distribution }} is not supported for this role"
-    that:
-      - ansible_distribution in os_supported_matrix
-
-- name: Get os version to compare with
-  ansible.builtin.set_fact:
-    version_to_compare: "{{ item.value.min_version }}"
-  loop: "{{ lookup('dict', os_supported_matrix) }}"
-  no_log: true
+- name: Check distribution compatibility
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution }} is not supported for this role"
   when:
-    - ansible_distribution in item.key
+    - ansible_distribution not in _nomad_linux_distros
+    - ansible_os_family != 'Windows'
 
-- name: Os_supported_matrix | check distribution version
-  ansible.builtin.assert:
-    quiet: true
-    fail_msg: "{{ ansible_distribution_version }} is not supported for this role"
-    that:
-      - ansible_distribution_version is version(version_to_compare, '>=')
+- name: Check Photon version
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution_version }} is not a supported version."
   when:
-    - version_to_compare is defined
-    - version_to_compare | length > 0
+    - ansible_distribution in ['VMware Photon OS']
+    - ansible_distribution_version is version_compare(4, '<')
+
+- name: Check Oracle Linux version
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution_version }} is not a supported version."
+  when:
+    - ansible_distribution in ['OracleLinux']
+    - ansible_distribution_version is version_compare(7, '<')
+
+- name: Check CentOS, Red Hat version
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution_version }} is not a supported version."
+  when:
+    - ansible_distribution in ['RedHat', 'CentOS']
+    - ansible_distribution_version is version_compare(6, '<')
+
+- name: Check Debian version
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution_version }} is not a supported version."
+  when:
+    - ansible_distribution == "Debian"
+    - (ansible_distribution_version is version_compare(10, '<'))
+
+- name: Check Ubuntu version
+  ansible.builtin.fail:
+    msg: "{{ ansible_distribution_version }} is not a supported version."
+  when:
+    - ansible_distribution == "Ubuntu"
+    - ansible_distribution_version is version_compare(20.04, '<')
 
 - name: Check nomad_group_name is included in groups
   ansible.builtin.fail:
     msg: nomad_group_name must be included in groups.
   when: nomad_group_name not in groups
+
+- name: DEBUG
+  ansible.builtin.debug:
+    var: nomad_node_role
+
+- name: Check host role is supported
+  ansible.builtin.fail:
+    msg: "Server role is not supported on Windows hosts"
+  when: 
+    - nomad_node_role == "server" or nomad_node_role == "both"
+    - ansible_os_family == 'Windows'
+
