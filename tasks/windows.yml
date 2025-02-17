@@ -42,10 +42,6 @@
     file: install_windows.yml
   when: nomad_install_binary | bool
 
-- name: debug
-  ansible.builtin.debug:
-    var: nomad_data_dir
-
 - name: Convert nomad_data_dir from Unix -> Windows
   ansible.windows.win_stat:
     path: "{{ nomad_data_dir }}"
